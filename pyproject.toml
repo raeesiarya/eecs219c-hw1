@@ -3,5 +3,14 @@ name = "code-template"
 version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
-requires-python = ">=3.10"
-dependencies = []
+requires-python = ">=3.11"
+dependencies = [
+    "dd==0.6.0",
+    "matplotlib>=3.10.8",
+    "numpy>=2.2.6",
+    "python-sat>=1.8.dev30",
+    "scikit-learn>=1.7.2",
+    "setuptools>=82.0.0",
+    "sympy>=1.14.0",
+    "z3-solver>=4.15.8.0",
+]
