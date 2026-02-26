@@ -12,5 +12,6 @@ dependencies = [
     "scikit-learn>=1.7.2",
     "setuptools>=82.0.0",
     "sympy>=1.14.0",
+    "tqdm>=4.67.3",
     "z3-solver>=4.15.8.0",
 ]

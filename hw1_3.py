@@ -30,11 +30,10 @@ import numpy as np
 # Data Loading & Preprocessing  (provided – do NOT modify)
 # ============================================================================
 
+
 def binarize_input(images: np.ndarray, threshold: float) -> np.ndarray:
     """Binarize pixel values: 1 if pixel >= threshold, else 0."""
     return np.where(images < threshold, 0, 1)
-
-
 
 
 def save_images_to_disk(imagesm, label, folder_name="digit_images"):
@@ -47,18 +46,17 @@ def save_images_to_disk(imagesm, label, folder_name="digit_images"):
         os.makedirs(folder_name)
         print(f"Created directory: {folder_name}")
 
-
     for i in range(len(images)):
         # Construct a unique filename
         filename = f"{label}_{i}.png"
         filepath = os.path.join(folder_name, filename)
 
-        plt.figure() # Start a new clean figure
-        plt.imshow(images[i], cmap='gray')
+        plt.figure()  # Start a new clean figure
+        plt.imshow(images[i], cmap="gray")
         plt.title(f"Digit {i}")
-        plt.axis('off') # Hide the 0-7 coordinates
+        plt.axis("off")  # Hide the 0-7 coordinates
         plt.savefig(filepath)
-        plt.close() # CRITICAL: Free up memory
+        plt.close()  # CRITICAL: Free up memory
 
         # Save the 8x8 array as an image
         # cmap='gray_r' ensures 1s are black and 0s are white
@@ -78,23 +76,43 @@ def load_dataset():
     ones_train,  ones_test  : np.ndarray binarized 8x8 images of digit 1
     """
     digits = load_digits()
-    X = digits.images          # shape (N, 8, 8)
+    X = digits.images  # shape (N, 8, 8)
     y = digits.target
 
-    #filter the images with label 0 and label 1
+    # filter the images with label 0 and label 1
     images_zeros = X[y == 0]
-    images_ones  = X[y == 1]
+    images_ones = X[y == 1]
 
-    #we remove some corner-cases noisy images
-    indices_to_remove = [14, 15, 17, 19, 22, 58, 130, 132, 135, 143, 144, 146, 147, 148, 149, 150, 152, 154, 155]
+    # we remove some corner-cases noisy images
+    indices_to_remove = [
+        14,
+        15,
+        17,
+        19,
+        22,
+        58,
+        130,
+        132,
+        135,
+        143,
+        144,
+        146,
+        147,
+        148,
+        149,
+        150,
+        152,
+        154,
+        155,
+    ]
     images_ones = np.delete(images_ones, indices_to_remove, axis=0)
 
-    #choose the threshold to be one-fourth
+    # choose the threshold to be one-fourth
     max_brightness = max(np.max(images_zeros), np.max(images_ones))
     threshold = max_brightness / 4
 
     images_zeros = binarize_input(images_zeros, threshold)
-    images_ones  = binarize_input(images_ones,  threshold)
+    images_ones = binarize_input(images_ones, threshold)
 
     # For this problem we use the full set as both train and test.
     return images_zeros, images_ones
@@ -103,20 +121,21 @@ def load_dataset():
 # ========================================================================
 # END OF DO NOT MODIFY
 # ========================================================================
-
+from tqdm import tqdm
 
 # ============================================================================
 # TODO  Q3 (i)  –  Initial Conditions
 # ============================================================================
+
 
 def initial_condition(zeros_train, ones_train):
     """
     Generate a conjunction of constraints enforcing that
     all initial state bits are equal to a single learnable constant.
 
-    This function introduces a single global Boolean variable and enforces the constraint 
+    This function introduces a single global Boolean variable and enforces the constraint
     that every initial state bit v_{i,0}^k must be the value of that variable.
-    This applies across all training images (both 0s and 1s), all rows within those images, 
+    This applies across all training images (both 0s and 1s), all rows within those images,
     and all state bits (k=0 to 3).
 
     Parameters
@@ -133,20 +152,40 @@ def initial_condition(zeros_train, ones_train):
     """
 
     # >>> YOUR CODE HERE <<<
-    
+
     # Placeholder example to demonstrate Z3 syntax (Replace this with your logic):
-    a = z3.Bool("BEST")
-    course_code = 219
-    b = z3.Bool(f"EECS{course_code}C")
-    formulae = [a, z3.Implies(z3.Bool("EECS219C"), z3.Bool("BEST")), a != b]
-    return z3.And(formulae)
-    
-    raise NotImplementedError
+    c = z3.Bool("init_c")  # single global constant for ALL rows/bits/images
+    constraints = []
+
+    num_zeros = len(zeros_train)
+    num_ones = len(ones_train)
+    total_imgs = num_zeros + num_ones
+
+    for img in tqdm(range(total_imgs), desc="Initial conditions"):
+        for i in range(8):
+            for k in range(4):
+                constraints.append(V(img, i, 0, k) == c)
+
+    return z3.And(constraints)
 
 
 # ============================================================================
 # TODO  Q3 (ii) & (iii)  –  Update Rules
 # ============================================================================
+def V(img, i, j, k):
+    # state bit v^k_{i,j} for image img
+    return z3.Bool(f"v_{img}_{i}_{j}_{k}")
+
+
+def one_hot(bs):
+    return z3.And(z3.Or(bs), z3.AtMost(*bs, 1))
+
+
+def mux_and_or(sel_is_and, a, b):
+    # if sel_is_and then a∧b else a∨b
+    return z3.If(sel_is_and, z3.And(a, b), z3.Or(a, b))
+
+
 def update_rules(zeros_train, ones_train):
     """
     Generate a conjunction of constraints governing the state transition from column j to j+1.
@@ -157,7 +196,7 @@ def update_rules(zeros_train, ones_train):
         Training data for digit '0'.
     ones_train : numpy.ndarray
         Training data for digit '1'.
-    
+
     Returns
     -------
     z3.BoolRef
@@ -165,12 +204,44 @@ def update_rules(zeros_train, ones_train):
     """
 
     # >>> YOUR CODE HERE <<<
-    raise NotImplementedError
+    op0_is_and = z3.Bool("op0_is_and")  # for k=0 update: AND vs OR
+    op1_is_and = z3.Bool("op1_is_and")  # for k>=1 outer op1: AND vs OR
+    op2_is_and = z3.Bool("op2_is_and")  # for k>=1 inner op2: AND vs OR
+
+    constraints = []
+
+    images = list(zeros_train) + list(ones_train)  # order matters for V(img,...)
+
+    for img, im in enumerate(tqdm(images, desc="Building update rules")):
+        for i in range(8):
+            for j in range(7):
+                pij = z3.BoolVal(bool(im[i, j]))
+                pij1 = z3.BoolVal(bool(im[i, j + 1]))
+                x = z3.Xor(pij, pij1)
+
+                # k = 0:
+                v0_cur = V(img, i, j, 0)
+                v0_next = V(img, i, j + 1, 0)
+                constraints.append(v0_next == mux_and_or(op0_is_and, v0_cur, x))
+
+                # k = 1..3:
+                for k in range(1, 4):
+                    vk_cur = V(img, i, j, k)
+                    vk_next = V(img, i, j + 1, k)
+
+                    # use the "already updated lower-order bit" v^{k-1}_{i,j+1}
+                    lower_cur = V(img, i, j, k - 1)
+                    inner = mux_and_or(op2_is_and, x, lower_cur)
+                    expr = mux_and_or(op1_is_and, vk_cur, inner)
+                    constraints.append(vk_next == expr)
+
+    return z3.And(constraints)
 
 
 # ============================================================================
 # TODO  Q3 (iv)  –  Final Selection
 # ============================================================================
+
 
 def final_selection(zeros_train, ones_train):
     """
@@ -189,13 +260,34 @@ def final_selection(zeros_train, ones_train):
         A Z3 conjunction (And) of constraints.
     """
     # >>> YOUR CODE HERE <<<
-    raise NotImplementedError
+    s = [z3.Bool(f"sel_{k}") for k in range(4)]
+    constraints = [one_hot(s)]
 
+    images = list(zeros_train) + list(ones_train)
+
+    for img, im in enumerate(tqdm(images, desc="Final selection")):
+        # φ^k = OR over rows of v^k_{i,7}
+        phi = []
+        for k in range(4):
+            phi_k = z3.Or([V(img, i, 7, k) for i in range(8)])
+            phi.append(phi_k)
+
+        # output = ¬φ^k for the selected k (one-hot mux)
+        y_hat = z3.Or([z3.And(s[k], z3.Not(phi[k])) for k in range(4)])
+
+        # enforce correct label: zeros -> False, ones -> True
+        if img < len(zeros_train):
+            constraints.append(y_hat == z3.BoolVal(False))
+        else:
+            constraints.append(y_hat == z3.BoolVal(True))
+
+    return z3.And(constraints)
 
 
 # ============================================================================
 # Training loop  (Needs Some Modification)
 # ============================================================================
+
 
 def train():
     """Invoke Z3 to `learn' parameters that classify all training images."""
@@ -235,13 +327,32 @@ def train():
         # 1. The initial condition constant
         # 2. The update rule operators (AND vs OR)
         # 3. The final selection bit index
-        
+
         model = solver.model()
         print("\n=== Learned Parameters ===")
-        
-        # >>> YOUR CODE HERE <<<
-        # Example: print("Init Constant:", model.eval(z3.Bool("your_var_name")))
 
+        # >>> YOUR CODE HERE <<<
+        print("init_c       =", model.eval(z3.Bool("init_c"), model_completion=True))
+
+        print(
+            "op0_is_and   =", model.eval(z3.Bool("op0_is_and"), model_completion=True)
+        )
+        print(
+            "op1_is_and   =", model.eval(z3.Bool("op1_is_and"), model_completion=True)
+        )
+        print(
+            "op2_is_and   =", model.eval(z3.Bool("op2_is_and"), model_completion=True)
+        )
+
+        sels = [z3.Bool(f"sel_{k}") for k in range(4)]
+        sel_vals = [model.eval(sels[k], model_completion=True) for k in range(4)]
+        print(
+            "selected k   =",
+            [k for k, v in enumerate(sel_vals) if z3.is_true(v)][0]
+            if any(z3.is_true(v) for v in sel_vals)
+            else "unknown",
+        )
+        print("sel vector   =", sel_vals)
     else:
         print("Uh oh! No satisfying assignment found.")
 

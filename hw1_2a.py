@@ -23,14 +23,14 @@ def pigeonhole(n: int):
 
     holes = n - 1
 
-    # helper mapping
     def var(i, j):
         return i * holes + j + 1
 
+    # Each pigeon in some hole
     for i in range(n):
-        clause = [var(i, j) for j in range(holes)]
-        formula.append(clause)
+        formula.append([var(i, j) for j in range(holes)])
 
+    # No hole has two pigeons
     for k in range(holes):
         for i in range(n):
             for j in range(i + 1, n):
@@ -48,22 +48,27 @@ def loop_n_times(n):
 
 
 if __name__ == "__main__":
-    formula = pigeonhole(4)
-    print(formula)
-
-    ## Code for plotting
-    n_values = range(4, 16)
+    n_values = range(4, 15)
     runtimes = []
+
     for n in n_values:
+        formula = pigeonhole(n)
+
         start = time.time()
-        loop_n_times(n)
+
+        with Solver(name="m22") as solver:
+            solver.append_formula(formula.clauses)
+            result = solver.solve()
+
         end = time.time()
 
         runtimes.append(end - start)
 
+        print(f"n={n}, SAT? {result}, time={end - start:.6f}s")
+
     plt.plot(n_values, runtimes, marker="o")
     plt.xlabel("n")
     plt.ylabel("Runtime (seconds)")
-    plt.title("Function Runtime for Varying Values of n")
+    plt.title("Pigeonhole SAT Runtime vs n")
     plt.grid(True)
     plt.show()
